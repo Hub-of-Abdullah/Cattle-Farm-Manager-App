@@ -39,8 +39,10 @@
   "categoryFood": "Food",
   "categoryMedicine": "Medicine",
   "categoryDoctor": "Doctor",
+  "categoryTakeProfit": "Take Profit",
   "categoryOther": "Other",
-  
+  "customCategoryLabel": "Category Name",
+
   "sale": "Sale",
   "sellCattle": "Sell Cattle",
   "saleDate": "Sale Date",
@@ -52,6 +54,19 @@
   "profitLoss": "Profit/Loss",
   "totalCost": "Total Cost",
   "totalRevenue": "Total Revenue",
+
+  "firmAccount": "Firm Account (TK)",
+  "firmAccountAvailable": "Available Balance",
+  "firmAccountTotalInvested": "Total Invested (Purchases)",
+  "firmAccountNote": "Revenue minus all purchases and expenses",
+  "totalDeposits": "Total Deposits",
+  "depositHistory": "Deposit History",
+  "noDeposits": "No deposits yet",
+  "addDeposit": "Add Money",
+  "subtractDeposit": "Subtract Money",
+  "depositAmount": "Amount",
+  "transactionHistory": "Transaction History",
+  "deleteDepositMessage": "Are you sure you want to delete this transaction?",
   
   "save": "Save",
   "cancel": "Cancel",

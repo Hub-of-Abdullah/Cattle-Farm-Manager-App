@@ -53,6 +53,14 @@ class Owner {
   }
 
   @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Owner && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
   String toString() {
     return 'Owner{id: $id, name: $name, phone: $phone, address: $address}';
   }

@@ -39,8 +39,10 @@
   "categoryFood": "খাদ্য",
   "categoryMedicine": "ওষুধ",
   "categoryDoctor": "ডাক্তার",
+  "categoryTakeProfit": "মুনাফা উত্তোলন",
   "categoryOther": "অন্যান্য",
-  
+  "customCategoryLabel": "ক্যাটাগরির নাম",
+
   "sale": "বিক্রয়",
   "sellCattle": "পশু বিক্রয় করুন",
   "saleDate": "বিক্রয়ের তারিখ",
@@ -52,6 +54,19 @@
   "profitLoss": "লাভ/ক্ষতি",
   "totalCost": "মোট খরচ",
   "totalRevenue": "মোট আয়",
+
+  "firmAccount": "ফার্ম একাউন্ট (টাকা)",
+  "firmAccountAvailable": "উপলব্ধ ব্যালেন্স",
+  "firmAccountTotalInvested": "মোট বিনিয়োগ (ক্রয়)",
+  "firmAccountNote": "আয় বিয়োগ সমস্ত ক্রয় ও খরচ",
+  "totalDeposits": "মোট জমা",
+  "depositHistory": "জমার ইতিহাস",
+  "noDeposits": "এখনো কোন জমা নেই",
+  "addDeposit": "টাকা যোগ করুন",
+  "subtractDeposit": "টাকা কাটুন",
+  "depositAmount": "পরিমাণ",
+  "transactionHistory": "লেনদেনের ইতিহাস",
+  "deleteDepositMessage": "আপনি কি এই লেনদেনটি মুছে ফেলতে চান?",
   
   "save": "সংরক্ষণ করুন",
   "cancel": "বাতিল",

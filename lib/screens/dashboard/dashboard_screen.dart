@@ -1,6 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../../core/constants/colors.dart';
 import '../../l10n/app_localizations.dart';
+import '../../providers/cattle_provider.dart';
+import '../../providers/expense_provider.dart';
+import '../../providers/owner_provider.dart';
+import '../../providers/sale_provider.dart';
+import '../../providers/sync_provider.dart';
+import '../../providers/firm_deposit_provider.dart';
+import '../cattle/add_edit_cattle_screen.dart';
+import '../firm_account/firm_account_screen.dart';
+import '../owners/add_edit_owner_screen.dart';
 import '../owners/owner_list_screen.dart';
 import '../cattle/cattle_list_screen.dart';
 import '../reports/reports_screen.dart';
@@ -22,17 +33,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _screens = [
-      const DashboardHome(),
+      const _DashboardHome(),
       const OwnerListScreen(),
       const CattleListScreen(),
       const ReportsScreen(),
+      const FirmAccountScreen(),
     ];
+    _loadAllData();
+  }
+
+  void _loadAllData() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ownerP = context.read<OwnerProvider>();
+      final cattleP = context.read<CattleProvider>();
+      final expenseP = context.read<ExpenseProvider>();
+      final saleP = context.read<SaleProvider>();
+      final depositP = context.read<FirmDepositProvider>();
+      ownerP.loadOwners();
+      cattleP.loadCattle();
+      expenseP.loadExpenses();
+      saleP.loadSales();
+      depositP.loadDeposits();
+    });
   }
 
   void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+    setState(() => _selectedIndex = index);
   }
 
   @override
@@ -59,6 +85,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.bar_chart),
             label: localizations.reports,
           ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.account_balance_wallet),
+            label: localizations.firmAccount,
+          ),
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
@@ -68,168 +98,212 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class DashboardHome extends StatelessWidget {
-  const DashboardHome({super.key});
+class _DashboardHome extends StatelessWidget {
+  const _DashboardHome();
 
   @override
   Widget build(BuildContext context) {
-    final localizations = AppLocalizations.of(context);
+    final l = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(localizations.appTitle),
+        title: Text(l.appTitle),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SettingsScreen(),
+          Consumer<SyncProvider>(
+            builder: (context, sync, _) {
+              if (!sync.isSignedIn) {
+                return IconButton(
+                  icon: const Icon(Icons.cloud_off_outlined),
+                  tooltip: 'Set up Google Sheets sync in Settings',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const SettingsScreen()),
+                  ),
+                );
+              }
+              if (sync.isSyncing) {
+                return const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  ),
+                );
+              }
+              return IconButton(
+                icon: Icon(
+                  sync.error != null
+                      ? Icons.cloud_off_outlined
+                      : Icons.cloud_done_outlined,
+                ),
+                tooltip: sync.error ??
+                    (sync.lastSync != null
+                        ? 'Synced. Tap to sync again.'
+                        : 'Tap to sync to Google Sheets'),
+                onPressed: () => sync.syncNow(
+                  ownerP: context.read<OwnerProvider>(),
+                  cattleP: context.read<CattleProvider>(),
+                  expenseP: context.read<ExpenseProvider>(),
+                  saleP: context.read<SaleProvider>(),
+                  depositP: context.read<FirmDepositProvider>(),
                 ),
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              localizations.dashboard,
-              style: Theme.of(context).textTheme.displaySmall,
-            ),
-            const SizedBox(height: 24),
+      body: Consumer5<OwnerProvider, CattleProvider, ExpenseProvider,
+          SaleProvider, FirmDepositProvider>(
+        builder:
+            (context, ownerP, cattleP, expenseP, saleP, depositP, _) {
+          final totalExpenses = expenseP.totalExpenses;
+          final totalRevenue = saleP.totalRevenue;
 
-            // Statistics Section
-            Text(
-              localizations.statistics,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 16),
+          // Firm account: deposits + revenue minus all purchases and expenses
+          final totalAllPurchases = cattleP.cattle
+              .fold(0.0, (sum, c) => sum + c.purchasePrice);
+          final firmBalance = totalRevenue + depositP.totalDeposits -
+              totalAllPurchases - totalExpenses;
 
-            // Statistics Cards
-            Row(
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.pets,
-                    label: localizations.totalCattle,
-                    value: '0',
-                    color: AppColors.primary,
+                // Firm Account balance — always shown first
+                _FirmBalanceBanner(
+                  balance: firmBalance,
+                  label: l.firmAccountAvailable,
+                  firmAccountLabel: l.firmAccount,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const FirmAccountScreen()),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.people,
-                    label: localizations.owners,
-                    value: '0',
-                    color: AppColors.info,
-                  ),
+                const SizedBox(height: 24),
+                Text(
+                  l.statistics,
+                  style: Theme.of(context).textTheme.headlineMedium,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.check_circle,
-                    label: localizations.activeCattle,
-                    value: '0',
-                    color: AppColors.success,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.sell,
-                    label: localizations.soldCattle,
-                    value: '0',
-                    color: AppColors.warning,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Financial Overview
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+                Row(
                   children: [
-                    Text(
-                      'Financial Overview',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.pets,
+                        label: l.totalCattle,
+                        value: '${cattleP.cattle.length}',
+                        color: AppColors.primary,
+                      ),
                     ),
-                    const SizedBox(height: 16),
-                    _FinancialRow(
-                      label: localizations.totalExpenses,
-                      value: '৳ 0.00',
-                      color: AppColors.error,
-                    ),
-                    const Divider(),
-                    _FinancialRow(
-                      label: localizations.totalRevenue,
-                      value: '৳ 0.00',
-                      color: AppColors.success,
-                    ),
-                    const Divider(),
-                    _FinancialRow(
-                      label: localizations.profitLoss,
-                      value: '৳ 0.00',
-                      color: AppColors.textPrimary,
-                      isTotal: true,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.people,
+                        label: l.owners,
+                        value: '${ownerP.owners.length}',
+                        color: AppColors.info,
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Quick Actions
-            Text(
-              'Quick Actions',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Navigate to add owner
-                    },
-                    icon: const Icon(Icons.person_add),
-                    label: Text(localizations.addOwner),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.check_circle,
+                        label: l.activeCattle,
+                        value: '${cattleP.activeCattle.length}',
+                        color: AppColors.success,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _StatCard(
+                        icon: Icons.sell,
+                        label: l.soldCattle,
+                        value: '${cattleP.soldCattle.length}',
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Navigate to add cattle
-                    },
-                    icon: const Icon(Icons.add),
-                    label: Text(localizations.addCattle),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                const SizedBox(height: 24),
+                Text(
+                  'Quick Actions',
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const AddEditOwnerScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.person_add),
+                        label: Text(l.addOwner),
+                        style: ElevatedButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          final owners =
+                              context.read<OwnerProvider>().owners;
+                          if (owners.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text('Please add an owner first.'),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const AddEditCattleScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.add),
+                        label: Text(l.addCattle),
+                        style: ElevatedButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -251,6 +325,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -277,40 +352,93 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _FinancialRow extends StatelessWidget {
+class _FirmBalanceBanner extends StatelessWidget {
+  final double balance;
   final String label;
-  final String value;
-  final Color color;
-  final bool isTotal;
+  final String firmAccountLabel;
+  final VoidCallback onTap;
 
-  const _FinancialRow({
+  const _FirmBalanceBanner({
+    required this.balance,
     required this.label,
-    required this.value,
-    required this.color,
-    this.isTotal = false,
+    required this.firmAccountLabel,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-                ),
+    final isPositive = balance >= 0;
+    final color = isPositive ? AppColors.success : AppColors.error;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isPositive
+                ? [const Color(0xFF0E3D22), const Color(0xFF1B5E38)]
+                : [const Color(0xFF7B1A14), const Color(0xFFC0392B)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: color,
-                  fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-                ),
-          ),
-        ],
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.account_balance_wallet,
+                          color: Colors.white70, size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        firmAccountLabel,
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '৳ ${balance.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.chevron_right, color: Colors.white),
+            ),
+          ],
+        ),
       ),
     );
   }

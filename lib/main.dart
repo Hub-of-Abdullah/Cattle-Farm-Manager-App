@@ -4,7 +4,13 @@ import 'package:provider/provider.dart';
 
 import 'core/constants/app_theme.dart';
 import 'l10n/app_localizations.dart';
+import 'providers/cattle_provider.dart';
+import 'providers/expense_provider.dart';
+import 'providers/firm_deposit_provider.dart';
+import 'providers/owner_provider.dart';
+import 'providers/sale_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/sync_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 
 void main() async {
@@ -20,6 +26,12 @@ class CattleFarmApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
+        ChangeNotifierProvider(create: (_) => OwnerProvider()),
+        ChangeNotifierProvider(create: (_) => CattleProvider()),
+        ChangeNotifierProvider(create: (_) => ExpenseProvider()),
+        ChangeNotifierProvider(create: (_) => SaleProvider()),
+        ChangeNotifierProvider(create: (_) => FirmDepositProvider()),
+        ChangeNotifierProvider(create: (_) => SyncProvider()),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, _) {
@@ -27,10 +39,8 @@ class CattleFarmApp extends StatelessWidget {
             title: 'Cattle Farm Manager',
             debugShowCheckedModeBanner: false,
 
-            // Theme
             theme: AppTheme.lightTheme,
 
-            // Localization
             locale: settings.locale,
             localizationsDelegates: const [
               AppLocalizations.delegate,
@@ -39,11 +49,10 @@ class CattleFarmApp extends StatelessWidget {
               GlobalCupertinoLocalizations.delegate,
             ],
             supportedLocales: const [
-              Locale('en', ''), // English
-              Locale('bn', ''), // Bangla
+              Locale('en', ''),
+              Locale('bn', ''),
             ],
 
-            // Home screen
             home: const DashboardScreen(),
           );
         },
