@@ -138,29 +138,60 @@ class OwnerDetailsScreen extends StatelessWidget {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: ElevatedButton.icon(
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      AddExpenseScreen(preselectedOwnerId: owner.id),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          AddEditCattleScreen(preselectedOwnerId: owner.id),
+                    ),
+                  ),
+                  icon: const Icon(Icons.pets, size: 18),
+                  label: Text(
+                    l.addCattle,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.info,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 52),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                  ),
                 ),
-              );
-            },
-            icon: const Icon(Icons.add_circle_outline, size: 20),
-            label: Text(
-              l.addExpense,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 52),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              elevation: 2,
-            ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            AddExpenseScreen(preselectedOwnerId: owner.id),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: Text(
+                    l.addExpense,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 52),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 2,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -195,6 +226,9 @@ class OwnerDetailsScreen extends StatelessWidget {
           final expenses = expenseProvider.getExpensesForOwner(owner.id!);
           final totalExpenses =
               expenses.fold(0.0, (sum, e) => sum + e.amount);
+          final totalPurchases =
+              ownerCattle.fold(0.0, (sum, c) => sum + c.purchasePrice);
+          final grandTotal = totalPurchases + totalExpenses;
 
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -237,6 +271,26 @@ class OwnerDetailsScreen extends StatelessWidget {
                                           .bodyMedium),
                               ],
                             ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '৳ ${grandTotal.toStringAsFixed(0)}',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.error,
+                                ),
+                              ),
+                              const Text(
+                                'Total Cost',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

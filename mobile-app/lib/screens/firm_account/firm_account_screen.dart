@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/colors.dart';
 import '../../l10n/app_localizations.dart';
+import '../../models/expense.dart';
 import '../../models/firm_deposit.dart';
 import '../../providers/cattle_provider.dart';
 import '../../providers/expense_provider.dart';
 import '../../providers/firm_deposit_provider.dart';
+import '../../providers/owner_provider.dart';
 import '../../providers/sale_provider.dart';
 
 class FirmAccountScreen extends StatefulWidget {
@@ -35,6 +37,21 @@ class _FirmAccountScreenState extends State<FirmAccountScreen> {
         depositProvider: depositProvider,
       ),
     );
+  }
+
+  String _categoryLabel(ExpenseCategory cat, AppLocalizations l) {
+    switch (cat) {
+      case ExpenseCategory.food:
+        return l.categoryFood;
+      case ExpenseCategory.medicine:
+        return l.categoryMedicine;
+      case ExpenseCategory.doctor:
+        return l.categoryDoctor;
+      case ExpenseCategory.takeProfit:
+        return l.categoryTakeProfit;
+      case ExpenseCategory.other:
+        return l.categoryOther;
+    }
   }
 
   void _confirmDelete(BuildContext context, FirmDeposit deposit) {
@@ -69,9 +86,9 @@ class _FirmAccountScreenState extends State<FirmAccountScreen> {
 
     return Scaffold(
       appBar: AppBar(title: Text(l.firmAccount)),
-      body: Consumer4<CattleProvider, ExpenseProvider, SaleProvider,
+      body: Consumer5<OwnerProvider, CattleProvider, ExpenseProvider, SaleProvider,
           FirmDepositProvider>(
-        builder: (context, cattleP, expenseP, saleP, depositP, _) {
+        builder: (context, ownerP, cattleP, expenseP, saleP, depositP, _) {
           final totalRevenue = saleP.totalRevenue;
           final totalAllPurchases =
               cattleP.cattle.fold(0.0, (sum, c) => sum + c.purchasePrice);
@@ -79,6 +96,47 @@ class _FirmAccountScreenState extends State<FirmAccountScreen> {
           final totalDeposits = depositP.totalDeposits;
           final balance = totalRevenue + totalDeposits -
               totalAllPurchases - totalExpenses;
+
+          final cattleMap = {
+            for (final c in cattleP.cattle) if (c.id != null) c.id!: c
+          };
+          final ownerMap = {
+            for (final o in ownerP.owners) if (o.id != null) o.id!: o
+          };
+          final List<_Tx> txList = [
+            ...depositP.deposits.map((d) => _Tx(
+                  date: d.date,
+                  amount: d.amount,
+                  title: d.amount < 0 ? l.subtractDeposit : l.addDeposit,
+                  subtitle: d.note,
+                  icon: d.amount < 0
+                      ? Icons.remove_circle_outline
+                      : Icons.add_circle_outline,
+                  onDelete: () => _confirmDelete(context, d),
+                )),
+            ...saleP.sales.map((s) {
+              final uid = cattleMap[s.cattleId]?.cattleUniqueId ?? '#${s.cattleId}';
+              return _Tx(
+                date: s.saleDate,
+                amount: s.salePrice,
+                title: 'Sale: $uid',
+                subtitle: s.buyerName != null ? 'Buyer: ${s.buyerName}' : null,
+                icon: Icons.sell,
+              );
+            }),
+            ...expenseP.expenses.map((e) {
+              final label = _categoryLabel(e.category, l);
+              final display = e.displayCategory(label);
+              final ownerName = ownerMap[e.ownerId]?.name;
+              return _Tx(
+                date: e.date,
+                amount: -e.amount,
+                title: 'Expense: $display',
+                subtitle: ownerName,
+                icon: Icons.receipt_long,
+              );
+            }),
+          ]..sort((a, b) => b.date.compareTo(a.date));
 
           return Column(
             children: [
@@ -173,28 +231,17 @@ class _FirmAccountScreenState extends State<FirmAccountScreen> {
 
               // ── Transaction list ──
               Expanded(
-                child: depositP.isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : depositP.deposits.isEmpty
-                        ? Center(
-                            child: Text(l.noDeposits,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyLarge),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(
-                                16, 4, 16, 16),
-                            itemCount: depositP.deposits.length,
-                            itemBuilder: (context, index) {
-                              final d = depositP.deposits[index];
-                              return _TransactionCard(
-                                deposit: d,
-                                onDelete: () =>
-                                    _confirmDelete(context, d),
-                              );
-                            },
-                          ),
+                child: txList.isEmpty
+                    ? Center(
+                        child: Text(l.noDeposits,
+                            style: Theme.of(context).textTheme.bodyLarge),
+                      )
+                    : ListView.builder(
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        itemCount: txList.length,
+                        itemBuilder: (_, i) => _TxCard(tx: txList[i]),
+                      ),
               ),
             ],
           );
@@ -300,47 +347,75 @@ class _SummaryRow extends StatelessWidget {
   }
 }
 
-// ── Transaction card in the list ────────────────────────────────────────────────
+// ── Unified transaction data class ──────────────────────────────────────────────
 
-class _TransactionCard extends StatelessWidget {
-  final FirmDeposit deposit;
-  final VoidCallback onDelete;
+class _Tx {
+  final DateTime date;
+  final double amount;
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final VoidCallback? onDelete;
 
-  const _TransactionCard(
-      {required this.deposit, required this.onDelete});
+  const _Tx({
+    required this.date,
+    required this.amount,
+    required this.title,
+    this.subtitle,
+    required this.icon,
+    this.onDelete,
+  });
+}
+
+// ── Unified transaction card ─────────────────────────────────────────────────────
+
+class _TxCard extends StatelessWidget {
+  final _Tx tx;
+
+  const _TxCard({required this.tx});
 
   @override
   Widget build(BuildContext context) {
-    final isWithdrawal = deposit.amount < 0;
-    final color =
-        isWithdrawal ? AppColors.error : AppColors.success;
+    final isPositive = tx.amount >= 0;
+    final color = isPositive ? AppColors.success : AppColors.error;
     final dateStr =
-        '${deposit.date.year}-${deposit.date.month.toString().padLeft(2, '0')}-${deposit.date.day.toString().padLeft(2, '0')}';
+        '${tx.date.year}-${tx.date.month.toString().padLeft(2, '0')}-${tx.date.day.toString().padLeft(2, '0')}';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.15),
-          child: Icon(
-            isWithdrawal ? Icons.arrow_upward : Icons.arrow_downward,
-            color: color,
-            size: 20,
-          ),
+          child: Icon(tx.icon, color: color, size: 20),
         ),
-        title: Text(
-          '${isWithdrawal ? '- ' : '+ '}৳ ${deposit.amount.abs().toStringAsFixed(0)}',
-          style: TextStyle(
-              fontWeight: FontWeight.bold, color: color, fontSize: 16),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                tx.title,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+            ),
+            Text(
+              '${isPositive ? '+' : '-'} ৳ ${tx.amount.abs().toStringAsFixed(0)}',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                  fontSize: 15),
+            ),
+          ],
         ),
-        subtitle: Text(deposit.note != null && deposit.note!.isNotEmpty
-            ? '$dateStr · ${deposit.note}'
-            : dateStr),
-        trailing: IconButton(
-          icon: const Icon(Icons.delete_outline,
-              color: AppColors.textTertiary),
-          onPressed: onDelete,
+        subtitle: Text(
+          tx.subtitle != null ? '$dateStr · ${tx.subtitle}' : dateStr,
         ),
+        trailing: tx.onDelete != null
+            ? IconButton(
+                icon: const Icon(Icons.delete_outline,
+                    color: AppColors.textTertiary),
+                onPressed: tx.onDelete,
+              )
+            : null,
       ),
     );
   }

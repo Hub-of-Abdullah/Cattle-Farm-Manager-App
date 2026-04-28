@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/constants/colors.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/cattle.dart';
+import '../../models/firm_deposit.dart';
 import '../../models/sale.dart';
 import '../../providers/cattle_provider.dart';
+import '../../providers/firm_deposit_provider.dart';
 import '../../providers/sale_provider.dart';
 
 class SellCattleScreen extends StatefulWidget {
@@ -21,11 +24,14 @@ class _SellCattleScreenState extends State<SellCattleScreen> {
   final _buyerNameController = TextEditingController();
   DateTime _saleDate = DateTime.now();
   bool _isSaving = false;
+  bool _addToFirmAccount = true;
+  final _firmAmountController = TextEditingController();
 
   @override
   void dispose() {
     _salePriceController.dispose();
     _buyerNameController.dispose();
+    _firmAmountController.dispose();
     super.dispose();
   }
 
@@ -45,6 +51,7 @@ class _SellCattleScreenState extends State<SellCattleScreen> {
 
     final saleProvider = context.read<SaleProvider>();
     final cattleProvider = context.read<CattleProvider>();
+    final depositProvider = context.read<FirmDepositProvider>();
     final l = AppLocalizations.of(context);
 
     final sale = Sale(
@@ -61,6 +68,15 @@ class _SellCattleScreenState extends State<SellCattleScreen> {
 
     if (saleOk) {
       await cattleProvider.markAsSold(widget.cattle.id!);
+      if (_addToFirmAccount) {
+        await depositProvider.addDeposit(
+              FirmDeposit(
+                amount: double.tryParse(_firmAmountController.text.trim()) ?? sale.salePrice,
+                date: _saleDate,
+                note: 'Sale: ${widget.cattle.cattleUniqueId}',
+              ),
+            );
+      }
     }
 
     if (!mounted) return;
@@ -162,7 +178,52 @@ class _SellCattleScreenState extends State<SellCattleScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                secondary: const Icon(Icons.account_balance_wallet,
+                    color: AppColors.primary),
+                title: const Text('Add to Firm Account',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Deposit sale amount automatically'),
+                value: _addToFirmAccount,
+                activeColor: AppColors.primary,
+                onChanged: (v) {
+                  setState(() {
+                    _addToFirmAccount = v;
+                    if (v && _firmAmountController.text.isEmpty) {
+                      _firmAmountController.text =
+                          _salePriceController.text.trim();
+                    }
+                  });
+                },
+              ),
+              if (_addToFirmAccount) ...[
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _firmAmountController,
+                  decoration: InputDecoration(
+                    labelText: 'Amount to Add',
+                    prefixIcon: const Icon(Icons.account_balance_wallet,
+                        color: AppColors.primary),
+                    prefixText: '৳ ',
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  validator: (v) {
+                    if (!_addToFirmAccount) return null;
+                    if (v == null || v.trim().isEmpty) {
+                      return l.validationRequired;
+                    }
+                    final n = double.tryParse(v.trim());
+                    if (n == null || n <= 0) {
+                      return l.validationPositiveAmount;
+                    }
+                    return null;
+                  },
+                ),
+              ],
+              const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: _isSaving ? null : _sell,
                 icon: const Icon(Icons.sell),
